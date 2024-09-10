@@ -1,1 +1,1 @@
-# 42_philosophers
+# philosophers
