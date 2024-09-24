@@ -1,9 +1,15 @@
 NAME = philo
 CFLAGS = -Wall -Wextra -Werror -O3
+# CFLAGS = -Wall -Wextra -Werror -g -Og
 # CFLAGS = -g -Og
 
 SRCS = \
 	main.c\
+	philo.c\
+	philo_util.c\
+	log.c\
+	util.c\
+	academy.c\
 
 OBJ = $(SRCS:.c=.o)
 

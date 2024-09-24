@@ -10,133 +10,153 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-/* allowed functions:
-memset, printf, malloc, free, write,
-usleep, gettimeofday,
-pthread_create, pthread_detach, pthread_join,
-pthread_mutex_init, pthread_mutex_destroy,
-pthread_mutex_lock, pthread_mutex_unlock
-*/
-
-#include <stdio.h>
-#include <stdlib.h>
+#include "philo.h"
 #include <pthread.h>
-#include <stdint.h>
 
-#define NUM_THREADS 10
-#define NUM_INCREMENTS 1000
-
-#define false 0
-#define true 1
-
-typedef int32_t	t_bool;
-
-typedef pthread_mutex_t t_fork;
-
-t_fork	*fork_take(t_fork *fork)
-{
-	pthread_mutex_lock(fork);
-}
-
-void	fork_put(t_fork *fork)
-{
-	pthread_mutex_unlock(fork);
-}
-
-typedef enum e_academy_status
-{
-	PREPARING,
-	OPEN,
-	CLOSED
-}	t_academy_status;
-
-typedef struct s_sync_academy_status
-{
-	t_academy_status	status;
-	pthread_mutex_t		mutex;
-}						t_sync_academy_status;
-
-typedef	struct s_academy
-{
-	t_sync_academy_status	*status;
-	t_fork					*forks;
-	t_philo					*philos;
-	size_t					n;
-}							t_academy;
-
-typedef	struct s_philo
-{
-	pthread_t	thread;
-	size_t		id;
-	t_fork		*left;
-	t_fork		*right;
-	t_academy	*academy;
-}				t_philo;
-
-t_bool	init_academy(t_philo *philo, t_fork *forks, size_t n)
+static t_bool	init_forks_and_philos(t_academy *academy, uint64_t start)
 {
 	size_t	i;
 
 	i = 0;
-	while (i < n)
+	while (i < academy->size)
 	{
-		philo[i].id = i + 1;
-		if (pthread_mutex_init(&forks[i], NULL) != 0)
+		if (pthread_mutex_init(&academy->forks[i], 0))
 			break ;
-		philo[i].left = &forks[i];
-		philo[i].right = &forks[(i + n - 1) % n];
+		academy->philos[i].id = i + 1;
+		academy->philos[i].left = &academy->forks[i];
+		academy->philos[i].right = &academy->forks[(i + academy->size - 1) % academy->size];
+		academy->philos[i].last_meal = start;
+		academy->philos[i].academy = academy;
+		if (pthread_mutex_init(&academy->philos[i].last_meal_lock, 0))
+		{
+			pthread_mutex_destroy(&academy->forks[i]);
+			break ;
+		}
 		i++;
 	}
-	if (i == n)
+	if (i == academy->size)
 		return (true);
 	while (i)
-		pthread_mutex_destroy(&forks[--i]);
+	{
+		pthread_mutex_destroy(&academy->forks[--i]);
+		pthread_mutex_destroy(&academy->philos[i].last_meal_lock);
+
+	}
 	return (false);
 }
 
-void	spawn_philo(t_philo *philo)
+t_bool	academy_create(t_academy *out, size_t size, uint64_t start)
 {
-	while (philo->academy->status == PREPARING)
-		usleep(200);
-	while (true)
-	{
-		fork_take(philo->left);
-		fork_take(philo->right);
-		printf("Philosopher %d is eating\n", philo->id);
-		usleep(1000);
-		fork_put(philo->left);
-		fork_put(philo->right);
-		printf("Philosopher %d is sleeping\n", philo->id);
-		usleep(1000);
-		printf("Philosopher %d is thinking\n", philo->id);
-		usleep(1000);
-	}
-}
-
-t_bool	open_academy(t_academy *academy, size_t n)
-{
-	size_t	i;
-
-	if (pthread_mutex_init(&academy->status->mutex, NULL) != 0)
+	*out = (t_academy){0};
+	out->size = size;
+	out->start_time = start;
+	out->philos = malloc(size * sizeof(t_philo));
+	if (!out->philos)
 		return (false);
-	i = 0;
-	while (i < n)
+	out->forks = malloc(size * sizeof(t_fork));
+	if (!out->forks)
 	{
-		if (pthread_create(&academy->philos[i].thread, NULL, spawn_philo, &academy->philos[i]) != 0)
+		free(out->philos);
+		return (false);
+	}
+	if (pthread_mutex_init(&out->dead_philo_lock, 0))
+	{
+		free(out->philos);
+		free(out->forks);
+		return (false);
+	}
+	if (pthread_mutex_init(&out->stdout_lock, 0))
+	{
+		free(out->philos);
+		free(out->forks);
+		pthread_mutex_destroy(&out->dead_philo_lock);
+		return (false);
+	}
+	if (!init_forks_and_philos(out, start))
+	{
+		free(out->philos);
+		free(out->forks);
+		pthread_mutex_destroy(&out->dead_philo_lock);
+		pthread_mutex_destroy(&out->stdout_lock);
+		return (false);
+	}
+	return (true);
+}
+
+t_bool	academy_start(t_academy *academy)
+{
+	size_t	i;
+
+	i = 0;
+	while (i < academy->size)
+	{
+		if (pthread_create(&academy->philos[i].thread, 0, spawn_philo, &academy->philos[i]))
 			break ;
 		i++;
 	}
-	if (i == n)
-	{
-		academy->status->status = OPEN;
+	if (i == academy->size)
 		return (true);
-	}
+	academy_set_dead_philo_if_none(academy, academy->philos);
 	while (i)
-		pthread_join(academy->philos[--i].thread, NULL);
-	pthread_mutex_destroy(&academy->status->mutex);
+		pthread_join(academy->philos[--i].thread, 0);
 	return (false);
 }
 
+void	academy_destroy(t_academy *academy)
+{
+	size_t	i;
+
+	i = 0;
+	if (academy->size == 0)
+		return ;
+	pthread_mutex_destroy(&academy->dead_philo_lock);
+	pthread_mutex_destroy(&academy->stdout_lock);
+	while (i < academy->size)
+	{
+		pthread_mutex_destroy(&academy->forks[i]);
+		i++;
+	}
+	free(academy->forks);
+	free(academy->philos);
+	*academy = (t_academy){0};
+}
+
+int	main(int argc, char **argv)
+{
+	t_academy	academy;
+	size_t		i;
+
+	(void)argc;
+	(void)argv;
+	// if (argc != 5 && argc != 6)
+	// 	return (1);
+	// if (!parse_args(&academy, argc, argv))
+	// 	return (1);
+	if (!academy_create(&academy, 2, get_time() + 250))
+		return (1);
+	/*
+Do not test with time_to_die or time_to_eat or time_to_sleep set to values lower than 60 ms.
+Test 1 800 200 200. The philosopher should not eat and should die.
+Test 5 800 200 200. No philosopher should die.
+Test 5 800 200 200 7. No philosopher should die and the simulation should stop when every philosopher has eaten at least 7 times.
+Test 4 410 200 200. No philosopher should die.
+Test 4 310 200 100. One philosopher should die.
+Test with 2 philosophers and check the different times: a death delayed by more than 10 ms is unacceptable.
+Test with any values of your choice to verify all the requirements. Ensure philosophers die at the right time, that they don't steal forks, and so forth.
+	*/
+	// number_of_philosophers  time_to_die  time_to_eat  time_to_sleep [number_of_times_each_philosopher_must_eat]
+	academy.sleep_time = 50;
+	academy.eat_time = 40;
+	academy.die_time = 95;
+	if (academy_start(&academy))
+	{
+		i = 0;
+		while (i < academy.size)
+			pthread_join(academy.philos[i++].thread, 0);
+	}
+	academy_destroy(&academy);
+	return (0);
+}
 
 // int	main(int argc, char **argv)
 // {
