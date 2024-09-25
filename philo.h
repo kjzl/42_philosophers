@@ -31,12 +31,26 @@ pthread_mutex_lock, pthread_mutex_unlock
 # include <unistd.h>
 # include <sys/time.h>
 
-# define false 0
-# define true 1
+# define FALSE 0
+# define TRUE 1
+
+# define BASE10 "0123456789"
 
 typedef int32_t	t_bool;
 
 typedef pthread_mutex_t t_fork;
+
+typedef struct s_str_slice
+{
+    const char  *str;
+    size_t      len;
+}               t_str_slice;
+
+typedef enum e_overflow_behavior
+{
+	OFB_TRUNCATE,
+	OFB_ERROR
+}					t_overflow_behavior;
 
 typedef	struct s_academy
 {
@@ -46,6 +60,7 @@ typedef	struct s_academy
 	uint32_t		die_time;
 	uint32_t		sleep_time;
 	uint32_t		eat_time;
+	uint32_t		eat_limit;
 	size_t			size;
 	pthread_mutex_t	dead_philo_lock;
 	struct s_philo	*dead_philo;
@@ -73,5 +88,10 @@ uint64_t	philo_get_last_meal_time(t_philo *philo);
 void		log_synced(const char *fmt, uint64_t time, t_philo *philo);
 void		sleep_until_abort_on_death(t_academy *academy, uint64_t time);
 uint64_t	get_time(void);
+
+t_bool		strsl_atoi(t_str_slice s, t_str_slice base, int32_t *out,
+				t_overflow_behavior ofb);
+t_str_slice	cstr_view(const char *str);
+t_str_slice	cstr_slice(const char *str, size_t len);
 
 #endif

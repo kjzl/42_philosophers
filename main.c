@@ -25,6 +25,11 @@ static t_bool	init_forks_and_philos(t_academy *academy, uint64_t start)
 		academy->philos[i].id = i + 1;
 		academy->philos[i].left = &academy->forks[i];
 		academy->philos[i].right = &academy->forks[(i + academy->size - 1) % academy->size];
+		if (academy->philos[i].right == academy->forks)
+		{
+			academy->philos[i].right = academy->philos[i].left;
+			academy->philos[i].left = academy->forks;
+		}
 		academy->philos[i].last_meal = start;
 		academy->philos[i].academy = academy;
 		if (pthread_mutex_init(&academy->philos[i].last_meal_lock, 0))
@@ -35,42 +40,41 @@ static t_bool	init_forks_and_philos(t_academy *academy, uint64_t start)
 		i++;
 	}
 	if (i == academy->size)
-		return (true);
+		return (TRUE);
 	while (i)
 	{
 		pthread_mutex_destroy(&academy->forks[--i]);
 		pthread_mutex_destroy(&academy->philos[i].last_meal_lock);
 
 	}
-	return (false);
+	return (FALSE);
 }
 
 t_bool	academy_create(t_academy *out, size_t size, uint64_t start)
 {
-	*out = (t_academy){0};
-	out->size = size;
+	out->dead_philo = 0;
 	out->start_time = start;
 	out->philos = malloc(size * sizeof(t_philo));
 	if (!out->philos)
-		return (false);
+		return (FALSE);
 	out->forks = malloc(size * sizeof(t_fork));
 	if (!out->forks)
 	{
 		free(out->philos);
-		return (false);
+		return (FALSE);
 	}
 	if (pthread_mutex_init(&out->dead_philo_lock, 0))
 	{
 		free(out->philos);
 		free(out->forks);
-		return (false);
+		return (FALSE);
 	}
 	if (pthread_mutex_init(&out->stdout_lock, 0))
 	{
 		free(out->philos);
 		free(out->forks);
 		pthread_mutex_destroy(&out->dead_philo_lock);
-		return (false);
+		return (FALSE);
 	}
 	if (!init_forks_and_philos(out, start))
 	{
@@ -78,9 +82,9 @@ t_bool	academy_create(t_academy *out, size_t size, uint64_t start)
 		free(out->forks);
 		pthread_mutex_destroy(&out->dead_philo_lock);
 		pthread_mutex_destroy(&out->stdout_lock);
-		return (false);
+		return (FALSE);
 	}
-	return (true);
+	return (TRUE);
 }
 
 t_bool	academy_start(t_academy *academy)
@@ -95,11 +99,11 @@ t_bool	academy_start(t_academy *academy)
 		i++;
 	}
 	if (i == academy->size)
-		return (true);
+		return (TRUE);
 	academy_set_dead_philo_if_none(academy, academy->philos);
 	while (i)
 		pthread_join(academy->philos[--i].thread, 0);
-	return (false);
+	return (FALSE);
 }
 
 void	academy_destroy(t_academy *academy)
@@ -121,18 +125,49 @@ void	academy_destroy(t_academy *academy)
 	*academy = (t_academy){0};
 }
 
+t_str_slice	base10(void)
+{
+	return (cstr_slice(BASE10, 10));
+}
+
+t_bool	parse_args(t_academy *academy, int argc, char **argv)
+{
+	int32_t	size;
+	int32_t	die_t;
+	int32_t	eat_t;
+	int32_t	sleep_t;
+	int32_t	max_meals;
+
+	max_meals = INT32_MAX;
+	if (argc > 4 && strsl_atoi(cstr_view(argv[1]), base10(), &size, OFB_ERROR)
+		&& strsl_atoi(cstr_view(argv[2]), base10(), &die_t, OFB_ERROR)
+		&& strsl_atoi(cstr_view(argv[3]), base10(), &eat_t, OFB_ERROR)
+		&& strsl_atoi(cstr_view(argv[4]), base10(), &sleep_t, OFB_ERROR)
+		&& (argc == 5
+			|| strsl_atoi(cstr_view(argv[5]), base10(), &max_meals, OFB_ERROR)
+		)
+		&& size > 0
+		&& die_t >= 0
+		&& eat_t >= 0
+		&& sleep_t >= 0
+		&& max_meals >= 0)
+	{
+		*academy = (t_academy){.die_time = die_t, .eat_time = eat_t,
+			.sleep_time = sleep_t, .size = size, .eat_limit = max_meals};
+		return (TRUE);
+	}
+	printf("Error\nUsage: %s philo_count die_time eat_time sleep_time [eat_limit]", argv[0]);
+	return (FALSE);
+}
+
 int	main(int argc, char **argv)
 {
 	t_academy	academy;
 	size_t		i;
 
-	(void)argc;
-	(void)argv;
-	// if (argc != 5 && argc != 6)
-	// 	return (1);
-	// if (!parse_args(&academy, argc, argv))
-	// 	return (1);
-	if (!academy_create(&academy, 2, get_time() + 250))
+	if (!parse_args(&academy, argc, argv))
+		return (1);
+	if (!academy_create(&academy, academy.size, get_time() + 250))
 		return (1);
 	/*
 Do not test with time_to_die or time_to_eat or time_to_sleep set to values lower than 60 ms.
@@ -144,10 +179,7 @@ Test 4 310 200 100. One philosopher should die.
 Test with 2 philosophers and check the different times: a death delayed by more than 10 ms is unacceptable.
 Test with any values of your choice to verify all the requirements. Ensure philosophers die at the right time, that they don't steal forks, and so forth.
 	*/
-	// number_of_philosophers  time_to_die  time_to_eat  time_to_sleep [number_of_times_each_philosopher_must_eat]
-	academy.sleep_time = 50;
-	academy.eat_time = 40;
-	academy.die_time = 95;
+	//
 	if (academy_start(&academy))
 	{
 		i = 0;

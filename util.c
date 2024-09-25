@@ -19,7 +19,7 @@ void	sleep_until_abort_on_death(t_academy *academy, uint64_t time)
 {
 	uint64_t	now;
 
-	while (true)
+	while (TRUE)
 	{
 		now = get_time();
 		if (now < time && !a_philo_died(academy))

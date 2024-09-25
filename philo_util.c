@@ -6,23 +6,23 @@ t_bool	forks_take(t_philo *philo)
 	if (a_philo_died(philo->academy))
 	{
 		pthread_mutex_unlock(philo->left);
-		return (false);
+		return (FALSE);
 	}
 	log_synced("%lu %lu has taken a fork\n", get_time(), philo);
 	if (philo->right == philo->left)
 	{
 		sleep_until_abort_on_death(philo->academy, philo->academy->start_time + philo->academy->die_time * 10);
-		return (false);
+		return (FALSE);
 	}
 	pthread_mutex_lock(philo->right);
 	if (a_philo_died(philo->academy))
 	{
 		pthread_mutex_unlock(philo->left);
 		pthread_mutex_unlock(philo->right);
-		return (false);
+		return (FALSE);
 	}
 	log_synced("%lu %lu has taken a fork\n", get_time(), philo);
-	return (true);
+	return (TRUE);
 }
 
 void	forks_put(t_philo *philo)
@@ -50,7 +50,7 @@ t_bool	a_philo_died(t_academy *academy)
 	time = get_time();
 	i = 0;
 	if (academy_get_dead_philo(academy) != 0)
-		return (true);
+		return (TRUE);
 	while (i < academy->size)
 	{
 		last_meal = philo_get_last_meal_time(&academy->philos[i++]);
@@ -59,8 +59,8 @@ t_bool	a_philo_died(t_academy *academy)
 		if (time - last_meal > academy->die_time)
 		{
 			academy_set_dead_philo_if_none(academy, &academy->philos[--i]);
-			return (true);
+			return (TRUE);
 		}
 	}
-	return (false);
+	return (FALSE);
 }

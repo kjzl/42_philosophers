@@ -1,4 +1,5 @@
 #include "philo.h"
+#include <stdio.h>
 
 static void	stdout_lock(t_academy *academy)
 {
