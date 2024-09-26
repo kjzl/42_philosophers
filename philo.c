@@ -20,18 +20,29 @@ static t_bool	philo_eat(t_philo *philo)
 		return (FALSE);
 	time = get_time();
 	philo_set_last_meal_time(philo, time);
-	log_synced("%lu %lu is eating\n", time, philo);
+	if (!a_philo_died(philo->academy))
+		log_synced("%lu %lu is eating\n", time, philo);
 	sleep_until_abort_on_death(philo->academy, time + philo->academy->eat_time);
 	forks_put(philo);
 	return (!a_philo_died(philo->academy));
 }
 
-static void	philo_think(t_philo *philo)
+static uint64_t	time_of_death(t_philo *philo, uint64_t time)
+{
+	uint64_t	elapsed;
+
+	elapsed = time - philo_get_last_meal_time(philo);
+	return (time + philo->academy->die_time - elapsed);
+}
+
+static t_bool	philo_think(t_philo *philo)
 {
 	uint64_t	time;
 
 	time = get_time();
 	log_synced("%lu %lu is thinking\n", time, philo);
+	sleep_until_abort_on_death(philo->academy, time_of_death(philo, time) - (philo->academy->eat_time / 3 * 5));
+	return (!a_philo_died(philo->academy));
 }
 
 static t_bool	philo_sleep(t_philo *philo)
@@ -63,13 +74,11 @@ void	*spawn_philo(void *arg)
 			break ;
 		if (!philo_sleep(me))
 			break ;
-		philo_think(me);
+		if (!philo_think(me))
+			break ;
 		i++;
 	}
 	if (academy_get_dead_philo(me->academy) == me)
 		log_synced("%lu %lu died\n", get_time(), me);
-	usleep(50000);
-	log_synced("", get_time(), me);
-	usleep(50000);
 	return (0);
 }
