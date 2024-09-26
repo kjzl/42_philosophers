@@ -41,7 +41,7 @@ static t_bool	philo_think(t_philo *philo)
 
 	time = get_time();
 	log_synced("%lu %lu is thinking\n", time, philo);
-	sleep_until_abort_on_death(philo->academy, time_of_death(philo, time) - (philo->academy->eat_time / 3 * 5));
+	sleep_until_abort_on_death(philo->academy, time_of_death(philo, time) - (philo->academy->eat_time / 2 * 3));
 	return (!a_philo_died(philo->academy));
 }
 
@@ -78,6 +78,7 @@ void	*spawn_philo(void *arg)
 			break ;
 		i++;
 	}
+	philo_set_last_meal_time(me, UINT64_MAX);
 	if (academy_get_dead_philo(me->academy) == me)
 		log_synced("%lu %lu died\n", get_time(), me);
 	return (0);

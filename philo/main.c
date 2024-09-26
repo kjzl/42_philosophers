@@ -24,7 +24,7 @@ static t_bool	init_forks_and_philos(t_academy *academy, uint64_t start)
 			break ;
 		academy->philos[i].id = i + 1;
 		academy->philos[i].left = &academy->forks[i];
-		academy->philos[i].right = &academy->forks[(i + academy->size - 1) % academy->size];
+		academy->philos[i].right = &academy->forks[(i + academy->size + 1) % academy->size];
 		if (academy->philos[i].right == academy->forks)
 		{
 			academy->philos[i].right = academy->philos[i].left;
